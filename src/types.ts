@@ -6,6 +6,8 @@ export interface Project {
   archived: boolean
   /** optional weekly target in hours */
   weeklyGoalHours?: number
+  /** local modification time (ms), used for sync conflict resolution */
+  updatedAt?: number
 }
 
 export type RatingKind = 'smiley' | 'slider'
@@ -25,6 +27,7 @@ export interface Session {
   comment?: string
   /** minutes east of UTC at session start, e.g. +120 for CEST */
   tzOffset: number
+  updatedAt?: number
 }
 
 /** The running (or stopped-but-unrated) timer. Persisted so it survives app kills. */
@@ -38,4 +41,5 @@ export interface ActiveTimer {
   pausedMs?: number
   /** set once Stop was pressed; the rating sheet is pending */
   end?: number
+  updatedAt?: number
 }

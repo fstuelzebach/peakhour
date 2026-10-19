@@ -1206,3 +1206,46 @@ main {
   border-radius: 10px;
   padding: 6px 4px;
 }
+
+/* ---------- sync ---------- */
+
+.row.static:active {
+  background: none;
+}
+
+.sync-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+}
+
+.sync-dot.idle {
+  background: #1baf7a;
+}
+
+.sync-dot.syncing {
+  background: #2a78d6;
+  animation: blink 1s infinite;
+}
+
+.sync-dot.error {
+  background: var(--danger);
+}
+
+.sync-login p {
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.sync-login form {
+  display: grid;
+  gap: 10px;
+}
+
+.text-input.code {
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

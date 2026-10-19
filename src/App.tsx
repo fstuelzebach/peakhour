@@ -5,6 +5,7 @@ import { Timer } from './screens/Timer'
 import { History } from './screens/History'
 import { Stats } from './screens/Stats'
 import { Projects } from './screens/Projects'
+import { useSyncDaemon } from './sync/supabase'
 
 const TABS = [
   {
@@ -54,6 +55,7 @@ type Tab = (typeof TABS)[number]['id']
 export default function App() {
   const [tab, setTab] = useState<Tab>('timer')
   const running = useLiveQuery(() => db.timer.get('active'), [])
+  useSyncDaemon()
 
   return (
     <div className="app">

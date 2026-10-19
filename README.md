@@ -21,7 +21,8 @@ Built first for one question: *when should I study for the CFA?*
   - Ideal session length
 - **Export** as JSON (for AI and scripts) or CSV (Excel/Numbers) via the iOS share sheet: Mail, AirDrop, Files …
 - **Import** a JSON backup
-- Offline-capable, dark mode, no account, no server: **your data stays on the device**
+- **Sync across iPhone, Mac and desktop (any browser)** via Supabase, signing in with an email code. Works offline and syncs when back online. Conflicts resolve as last write wins. The running timer syncs too: start on the Mac, stop on the iPhone.
+- Offline-capable, dark mode. Without signing in, everything stays local on the device.
 
 ## Install on your iPhone
 
@@ -30,6 +31,18 @@ Built first for one question: *when should I study for the CFA?*
 3. Launch it from the home screen. It runs full-screen like a native app.
 
 > Data lives in the app's local storage (IndexedDB). Apps added to the home screen are exempt from Safari's 7-day storage cleanup, but **export a JSON backup regularly** anyway (Projekte → Export als JSON).
+
+## Sync setup (Supabase, one-time)
+
+1. Create a free project at [supabase.com](https://supabase.com)
+2. **SQL Editor** → paste [`supabase/schema.sql`](supabase/schema.sql) → **Run**
+3. **Authentication → Emails → Magic Link** template: make sure the body contains the code, e.g. `Dein Peakhour-Code: {{ .Token }}`. A code works inside the home-screen app; a link would open plain Safari instead.
+4. **Project Settings → API**: copy the *Project URL* and the *anon / publishable* key, then
+   - for GitHub Pages: `gh variable set VITE_SUPABASE_URL` and `gh variable set VITE_SUPABASE_ANON_KEY`, then re-run the deploy
+   - for local dev: copy `.env.example` to `.env.local` and fill it in
+5. In the app: **Projekte → Sync** → email → enter the code. Do the same on every device.
+
+The anon key is meant to be public; row level security ensures each user only sees their own rows. For analysis, the view `session_stats` provides one row per session with net minutes and local time. Query it in the Supabase SQL editor or connect any Postgres tool.
 
 ## Development
 
@@ -43,14 +56,16 @@ npm run build        # production build to dist/
 
 Every push to `main` deploys automatically to GitHub Pages (`.github/workflows/deploy.yml`).
 
-**Stack:** React 19 · TypeScript · Vite · Dexie (IndexedDB) · vite-plugin-pwa · Vitest
+**Stack:** React 19 · TypeScript · Vite · Dexie (IndexedDB) · Supabase · vite-plugin-pwa · Vitest
 
 ```
 src/
   screens/     Timer, History, Stats, Projects
   components/  SessionSheet (rate/edit), RatingInput, Sheet
   lib/         stats.ts (aggregation), export.ts (JSON/CSV), format.ts
+  sync/        local-first sync engine (dirty tracking, LWW) + Supabase adapter
   db.ts        Dexie schema + timer actions
+supabase/      SQL schema with row level security
 analysis/      Python analysis of the JSON export
 scripts/       icon generator
 ```
@@ -101,7 +116,7 @@ The CSV has the same session fields, one row per session. Both formats can go st
 
 - Tags or location per session (library / home / café)
 - Reminder when a timer has been running for an unusually long time
-- Optional sync (iCloud / own backend) and a native SwiftUI version
+- Native wrapper (Capacitor) or SwiftUI version for Live Activities and widgets
 
 ## License
 

@@ -6,6 +6,8 @@ import { hours } from '../lib/format'
 import { exportAs, importJson } from '../lib/export'
 import { totalsByProject } from '../lib/stats'
 import { Sheet } from '../components/Sheet'
+import { SyncCard } from '../components/SyncCard'
+import { supabase } from '../sync/supabase'
 
 export function Projects() {
   const projects = useLiveQuery(() => db.projects.orderBy('createdAt').toArray(), [])
@@ -55,6 +57,13 @@ export function Projects() {
         </>
       )}
 
+      {supabase && (
+        <>
+          <h4 className="section-label">Sync</h4>
+          <SyncCard />
+        </>
+      )}
+
       <h4 className="section-label">Daten</h4>
       <div className="card list">
         <button className="row" onClick={() => exportAs('json')}>
@@ -98,7 +107,9 @@ export function Projects() {
       </div>
       {msg && <p className="toast">{msg}</p>}
       <p className="muted small footnote">
-        Deine Daten bleiben nur auf diesem Gerät. Exportiere regelmäßig als Backup.
+        {supabase
+          ? 'Ohne Anmeldung bleiben deine Daten nur auf diesem Gerät.'
+          : 'Deine Daten bleiben nur auf diesem Gerät. Exportiere regelmäßig als Backup.'}
       </p>
 
       <ProjectSheet project={editing} onClose={() => setEditing(null)} />
