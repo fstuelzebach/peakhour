@@ -1,6 +1,8 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { PROJECT_COLORS, db, discardTimer, saveSession, startTimer, stopTimer, uid } from '../db'
+import { PROJECT_COLORS, db, discardTimer, pauseTimer, resumeTimer, saveSession, startTimer, stopTimer, timerElapsed, uid } from '../db'
+import { duration, weekStart } from '../lib/stats'
+import { GoalProgress } from '../components/GoalProgress'
 import { clock, hours, timeOfDay } from '../lib/format'
 import { useNow } from '../lib/useNow'
 import { SessionSheet } from '../components/SessionSheet'
@@ -10,16 +12,14 @@ const LAST_PROJECT = 'peakhour:lastProject'
 export function Timer() {
   const projects = useLiveQuery(() => db.projects.orderBy('createdAt').filter((p) => !p.archived).toArray(), [])
   const timer = useLiveQuery(() => db.timer.get('active'), [])
-  const todayMs = useLiveQuery(async () => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    const list = await db.sessions.where('start').aboveOrEqual(d.getTime()).toArray()
-    return list.reduce((a, s) => a + s.end - s.start, 0)
-  }, [])
+  // this week's sessions (covers "today" as well)
+  const week = useLiveQuery(() => db.sessions.where('start').aboveOrEqual(weekStart(Date.now())).toArray(), [])
 
   const [selected, setSelected] = useState<string | null>(() => localStorage.getItem(LAST_PROJECT))
   const running = !!timer && !timer.end
-  const now = useNow(1000, running)
+  const paused = running && !!timer.pausedAt
+  const now = useNow(1000, running && !paused)
+  const elapsed = running ? timerElapsed(timer, now) : 0
 
   const validSelected = projects?.some((p) => p.id === selected) ? selected : projects?.[0]?.id
   const activeId = timer?.projectId ?? validSelected
@@ -27,23 +27,28 @@ export function Timer() {
   const color = project?.color ?? PROJECT_COLORS[0]
 
   const draft = useMemo(
-    () => (timer?.end ? { projectId: timer.projectId, start: timer.start, end: timer.end } : null),
+    () => (timer?.end ? { projectId: timer.projectId, start: timer.start, end: timer.end, pausedMs: timer.pausedMs } : null),
     [timer],
   )
 
   if (projects === undefined) return null
   if (projects.length === 0) return <FirstProject />
 
-  const toggle = async () => {
-    if (running) {
-      navigator.vibrate?.(20)
-      await stopTimer()
-    } else if (project) {
-      localStorage.setItem(LAST_PROJECT, project.id)
-      navigator.vibrate?.(10)
-      await startTimer(project.id)
-    }
+  const start = async () => {
+    if (!project) return
+    localStorage.setItem(LAST_PROJECT, project.id)
+    navigator.vibrate?.(10)
+    await startTimer(project.id)
   }
+  const stop = async () => {
+    navigator.vibrate?.(20)
+    await stopTimer()
+  }
+  const togglePause = () => (paused ? resumeTimer() : pauseTimer())
+
+  const startOfToday = new Date().setHours(0, 0, 0, 0)
+  const todayMs = (week ?? []).filter((s) => s.start >= startOfToday).reduce((a, s) => a + duration(s), 0)
+  const weekMs = (week ?? []).filter((s) => s.projectId === project?.id).reduce((a, s) => a + duration(s), 0)
 
   return (
     <div className="screen timer-screen" style={{ '--accent': color } as CSSProperties}>
@@ -62,17 +67,42 @@ export function Timer() {
         ))}
       </div>
 
-      <div className="timer-center">
-        <div className="timer-clock">{clock(running ? now - timer!.start : 0)}</div>
+      <div className={`timer-center ${paused ? 'paused' : ''}`}>
+        <div className="timer-clock">{clock(elapsed)}</div>
         <div className="timer-sub muted">
-          {running ? `${project?.name} · seit ${timeOfDay(timer!.start)}` : `Heute: ${hours(todayMs ?? 0)}`}
+          {paused
+            ? `Pausiert · ${project?.name}`
+            : running
+              ? `${project?.name} · seit ${timeOfDay(timer!.start)}`
+              : `Heute: ${hours(todayMs)}`}
         </div>
 
-        <button className={`big-button ${running ? 'running' : ''}`} onClick={toggle} aria-label={running ? 'Stop' : 'Start'}>
-          <span className="big-icon">{running ? <span className="stop-square" /> : <span className="play-triangle" />}</span>
-          <span className="big-label">{running ? 'Stop' : 'Start'}</span>
-        </button>
+        {running ? (
+          <div className="run-controls">
+            <button className="round-button secondary" onClick={togglePause} aria-label={paused ? 'Weiter' : 'Pause'}>
+              <span className="big-icon">{paused ? <span className="play-triangle small" /> : <span className="pause-bars" />}</span>
+              <span className="round-label">{paused ? 'Weiter' : 'Pause'}</span>
+            </button>
+            <button className={`round-button ${paused ? '' : 'running'}`} onClick={stop} aria-label="Stop">
+              <span className="big-icon">
+                <span className="stop-square small" />
+              </span>
+              <span className="round-label">Stop</span>
+            </button>
+          </div>
+        ) : (
+          <button className="big-button" onClick={start} aria-label="Start">
+            <span className="big-icon">
+              <span className="play-triangle" />
+            </span>
+            <span className="big-label">Start</span>
+          </button>
+        )}
       </div>
+
+      {project?.weeklyGoalHours ? (
+        <GoalProgress goalHours={project.weeklyGoalHours} doneMs={weekMs + (timer?.end ? 0 : elapsed)} color={color} />
+      ) : null}
 
       {draft && (
         <SessionSheet

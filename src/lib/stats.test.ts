@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Session } from '../types'
-import { hourSlices, insights, streak, totalsByProject, weekGrid } from './stats'
+import { duration, hourSlices, insights, streak, totalsByProject, weekGrid, weekStart, weeklyHistory } from './stats'
+import { timerElapsed } from '../db'
 
 const at = (y: number, mo: number, d: number, h: number, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime()
 
@@ -70,5 +71,41 @@ describe('aggregation', () => {
   it('counts the streak up to today or yesterday', () => {
     expect(streak(data, at(2026, 10, 21, 12))).toBe(2)
     expect(streak(data, at(2026, 10, 23, 12))).toBe(0)
+  })
+})
+
+describe('pauses', () => {
+  it('excludes paused time from duration and spreads it over hour slices', () => {
+    const s = { ...sess(at(2026, 10, 19, 9), 120, 80), pausedMs: 30 * 60_000 }
+    expect(duration(s) / 60_000).toBe(90)
+    const slices = hourSlices(s)
+    expect(slices.reduce((a, x) => a + x.ms, 0) / 60_000).toBe(90)
+    expect(totalsByProject([s]).get('cfa')! / 60_000).toBe(90)
+  })
+
+  it('computes live elapsed time for running, paused and stopped timers', () => {
+    const start = at(2026, 10, 19, 9)
+    const min = 60_000
+    expect(timerElapsed({ key: 'active', projectId: 'p', start }, start + 10 * min)).toBe(10 * min)
+    expect(timerElapsed({ key: 'active', projectId: 'p', start, pausedAt: start + 10 * min }, start + 25 * min)).toBe(10 * min)
+    expect(timerElapsed({ key: 'active', projectId: 'p', start, pausedMs: 5 * min }, start + 25 * min)).toBe(20 * min)
+    expect(timerElapsed({ key: 'active', projectId: 'p', start, pausedMs: 5 * min, end: start + 30 * min }, start + 99 * min)).toBe(25 * min)
+  })
+})
+
+describe('weekly goals', () => {
+  it('starts weeks on Monday', () => {
+    expect(weekStart(at(2026, 10, 25, 22))).toBe(at(2026, 10, 19, 0)) // Sunday → Monday before
+    expect(weekStart(at(2026, 10, 19, 0, 1), 1)).toBe(at(2026, 10, 12, 0))
+  })
+
+  it('builds per-week history for one project', () => {
+    const data = [
+      sess(at(2026, 10, 13, 8), 60, 50), // last week
+      sess(at(2026, 10, 20, 8), 90, 50), // this week
+      sess(at(2026, 10, 20, 12), 30, 50, 'other'),
+    ]
+    const h = weeklyHistory(data, 'cfa', at(2026, 10, 21, 12), 3)
+    expect(h.map((w) => w.ms / 60_000)).toEqual([0, 60, 90])
   })
 })

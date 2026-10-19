@@ -9,6 +9,8 @@ Built first for one question: *when should I study for the CFA?*
 ## Features
 
 - **One-tap timer**: the start time is stored immediately, so the timer survives closing the app or a phone restart
+- **Pause / Resume**: pauses don't count toward your time; the session stays one session
+- **Weekly goal per project** (e.g. 15 h CFA): progress on the timer screen including the needed hours per day, plus a history of the last 8 weeks in Insights
 - **Session rating**: 5 smileys (Zäh → Flow) plus a slider for fine-tuning (0–100), optional comment
 - **Edit and add sessions** if you forgot to press Stop
 - **Insights**
@@ -73,7 +75,7 @@ The script prints hours per project and week, rating by weekday, time of day and
   "version": 1,
   "exportedAt": "2026-10-19T18:54:50.328Z",
   "projects": [
-    { "id": "…", "name": "CFA Level I", "color": "#2a78d6", "archived": false, "createdAt": "…" }
+    { "id": "…", "name": "CFA Level I", "color": "#2a78d6", "archived": false, "weeklyGoalHours": 15, "createdAt": "…" }
   ],
   "sessions": [
     {
@@ -82,7 +84,8 @@ The script prints hours per project and week, rating by weekday, time of day and
       "project": "CFA Level I",
       "start": "2026-10-13T07:28:00+02:00",   // local time with offset
       "end": "2026-10-13T08:29:00+02:00",
-      "durationMin": 61,
+      "durationMin": 61,                      // net, pauses excluded
+      "pausedMin": 0,
       "weekday": "Dienstag",
       "rating": 75,                           // 0–100; smileys = 0/25/50/75/100
       "ratingKind": "smiley",                 // or "slider"
@@ -96,7 +99,6 @@ The CSV has the same session fields, one row per session. Both formats can go st
 
 ## Roadmap ideas
 
-- Weekly goal per project (e.g. 15 h CFA) with progress ring
 - Tags or location per session (library / home / café)
 - Reminder when a timer has been running for an unusually long time
 - Optional sync (iCloud / own backend) and a native SwiftUI version

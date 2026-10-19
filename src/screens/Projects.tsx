@@ -112,8 +112,9 @@ function ProjectRow({ p, ms, onClick }: { p: Project; ms: number; onClick: () =>
       <span className="dot big" style={{ background: p.color }} />
       <span className="row-main">
         <span className="row-title">{p.name}</span>
+        {p.weeklyGoalHours ? <span className="row-sub muted">Ziel: {p.weeklyGoalHours} h / Woche</span> : null}
       </span>
-      <span className="row-dur muted">{hours(ms)}</span>
+      <span className="row-dur muted">{hours(ms)} gesamt</span>
       <span className="chev">›</span>
     </button>
   )
@@ -122,6 +123,7 @@ function ProjectRow({ p, ms, onClick }: { p: Project; ms: number; onClick: () =>
 function ProjectSheet({ project, onClose }: { project: Project | null; onClose: () => void }) {
   const [name, setName] = useState('')
   const [color, setColor] = useState(PROJECT_COLORS[0])
+  const [goal, setGoal] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [lastId, setLastId] = useState<Project | null>(null)
 
@@ -131,6 +133,7 @@ function ProjectSheet({ project, onClose }: { project: Project | null; onClose: 
     if (project) {
       setName(project.name)
       setColor(project.color)
+      setGoal(project.weeklyGoalHours ? String(project.weeklyGoalHours) : '')
       setConfirm(false)
     }
   }
@@ -140,8 +143,10 @@ function ProjectSheet({ project, onClose }: { project: Project | null; onClose: 
 
   const save = async () => {
     if (!name.trim()) return
-    if (isNew) await db.projects.add({ ...project, id: uid(), name: name.trim(), color })
-    else await db.projects.update(project.id, { name: name.trim(), color })
+    const g = parseFloat(goal.replace(',', '.'))
+    const weeklyGoalHours = g > 0 ? Math.round(g * 2) / 2 : undefined
+    if (isNew) await db.projects.add({ ...project, id: uid(), name: name.trim(), color, weeklyGoalHours })
+    else await db.projects.update(project.id, { name: name.trim(), color, weeklyGoalHours })
     onClose()
   }
 
@@ -154,6 +159,27 @@ function ProjectSheet({ project, onClose }: { project: Project | null; onClose: 
           <button key={c} className={`swatch ${c === color ? 'on' : ''}`} style={{ background: c }} onClick={() => setColor(c)} aria-label={c} />
         ))}
       </div>
+      <label className="goal-field">
+        <span>
+          Wochenziel
+          <span className="muted small"> optional</span>
+        </span>
+        <span className="goal-stepper">
+          <button type="button" onClick={() => setGoal(String(Math.max(0, (parseFloat(goal.replace(',', '.')) || 0) - 1)))}>
+            −
+          </button>
+          <input
+            inputMode="decimal"
+            placeholder="–"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value.replace(/[^\d.,]/g, ''))}
+          />
+          <span className="muted">h</span>
+          <button type="button" onClick={() => setGoal(String((parseFloat(goal.replace(',', '.')) || 0) + 1))}>
+            +
+          </button>
+        </span>
+      </label>
       <div className="sheet-actions">
         {!isNew && (
           <button

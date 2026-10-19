@@ -10,6 +10,7 @@ export interface SessionDraft {
   projectId: string
   start: number
   end: number
+  pausedMs?: number
   rating?: number
   ratingKind?: RatingKind
   comment?: string
@@ -19,7 +20,7 @@ interface Props {
   open: boolean
   mode: 'rate' | 'edit' | 'new'
   draft: SessionDraft
-  onSave: (s: Required<Omit<SessionDraft, 'comment'>> & { comment?: string }) => void
+  onSave: (s: Required<Omit<SessionDraft, 'comment' | 'pausedMs'>> & { comment?: string; pausedMs?: number }) => void
   onCancel?: () => void
   /** "Verwerfen" in rate mode, "Löschen" in edit mode */
   onDelete?: () => void
@@ -37,17 +38,23 @@ export function SessionSheet({ open, mode, draft, onSave, onCancel, onDelete }: 
   const [comment, setComment] = useState(draft.comment ?? '')
   const [editTimes, setEditTimes] = useState(mode !== 'rate')
   const [confirmDelete, setConfirmDelete] = useState(false)
-
+  const [pauseMin, setPauseMin] = useState(Math.round((draft.pausedMs ?? 0) / 60_000))
 
   const project = projects?.find((p) => p.id === projectId)
-  const valid = rating !== null && end > start && !!projectId
+  // keep the exact paused ms unless the user edited the minutes
+  const pausedMs = pauseMin === Math.round((draft.pausedMs ?? 0) / 60_000) ? (draft.pausedMs ?? 0) : pauseMin * 60_000
+  const net = end - start - pausedMs
+  const valid = rating !== null && net > 0 && !!projectId
 
   return (
     <Sheet open={open} onClose={mode === 'rate' ? undefined : onCancel}>
       <div className="sheet-head">
         <span className="dot" style={{ background: project?.color }} />
         <span className="muted">{project?.name}</span>
-        <span className="sheet-duration">{clock(end - start)}</span>
+        <span className="sheet-duration">
+          {clock(net)}
+          {pausedMs >= 60_000 && <span className="muted"> + {Math.round(pausedMs / 60_000)} min Pause</span>}
+        </span>
       </div>
       <h2>{TITLES[mode]}</h2>
 
@@ -89,7 +96,17 @@ export function SessionSheet({ open, mode, draft, onSave, onCancel, onDelete }: 
             Ende
             <input type="datetime-local" value={toLocalInput(end)} onChange={(e) => e.target.value && setEnd(fromLocalInput(e.target.value))} />
           </label>
-          {end <= start && <p className="error">Ende muss nach dem Start liegen.</p>}
+          <label>
+            Pause (min)
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={pauseMin}
+              onChange={(e) => setPauseMin(Math.max(0, Number(e.target.value) || 0))}
+            />
+          </label>
+          {net <= 0 && <p className="error">Ende muss nach Start plus Pause liegen.</p>}
         </div>
       ) : (
         <button type="button" className="link" onClick={() => setEditTimes(true)}>
@@ -118,7 +135,7 @@ export function SessionSheet({ open, mode, draft, onSave, onCancel, onDelete }: 
           className="btn primary"
           disabled={!valid}
           style={{ background: project?.color }}
-          onClick={() => valid && onSave({ projectId, start, end, rating: rating!, ratingKind: kind, comment: comment.trim() || undefined })}
+          onClick={() => valid && onSave({ projectId, start, end, pausedMs: pausedMs || undefined, rating: rating!, ratingKind: kind, comment: comment.trim() || undefined })}
         >
           Speichern
         </button>

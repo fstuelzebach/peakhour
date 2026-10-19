@@ -4,7 +4,32 @@ import { weekday } from './format'
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
 
-export const duration = (s: Session) => s.end - s.start
+/** Net working time (pauses excluded) */
+export const duration = (s: Pick<Session, 'start' | 'end' | 'pausedMs'>) => s.end - s.start - (s.pausedMs ?? 0)
+
+/** Monday 00:00 of the week containing `t`, shifted by `weeksBack` */
+export function weekStart(t: number, weeksBack = 0) {
+  const d = new Date(t)
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - weekday(d) - weeksBack * 7)
+  return d.getTime()
+}
+
+/** Net ms per project in the week starting at `from` */
+export function weekTotals(sessions: Session[], from: number) {
+  const to = new Date(from)
+  to.setDate(to.getDate() + 7)
+  return totalsByProject(sessions.filter((s) => s.start >= from && s.start < to.getTime()))
+}
+
+/** Last `weeks` weeks (oldest first, current last): net ms for one project */
+export function weeklyHistory(sessions: Session[], projectId: string, now = Date.now(), weeks = 8) {
+  const own = sessions.filter((s) => s.projectId === projectId)
+  return Array.from({ length: weeks }, (_, i) => {
+    const from = weekStart(now, weeks - 1 - i)
+    return { from, ms: weekTotals(own, from).get(projectId) ?? 0 }
+  })
+}
 
 export function totalsByProject(sessions: Session[]) {
   const map = new Map<string, number>()
@@ -12,15 +37,16 @@ export function totalsByProject(sessions: Session[]) {
   return map
 }
 
-/** Splits a session at local hour boundaries: [{weekday, hour, ms}] */
+/** Splits a session at local hour boundaries: [{weekday, hour, ms}]. Pauses are spread evenly. */
 export function hourSlices(s: Session) {
   const out: { weekday: number; hour: number; ms: number }[] = []
+  const net = s.end > s.start ? duration(s) / (s.end - s.start) : 0
   let t = s.start
   while (t < s.end) {
     const d = new Date(t)
     const next = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() + 1).getTime()
     const until = Math.min(next, s.end)
-    out.push({ weekday: weekday(d), hour: d.getHours(), ms: until - t })
+    out.push({ weekday: weekday(d), hour: d.getHours(), ms: (until - t) * net })
     t = until
   }
   return out
@@ -138,10 +164,7 @@ export function insights(sessions: Session[], now = Date.now()) {
   // "never" only means something once every weekday had a chance at least twice
   const neverWeekdays = spanDays >= 14 ? [0, 1, 2, 3, 4, 5, 6].filter((d) => !byWeekday.has(d)) : []
 
-  const weekStart = new Date(now)
-  weekStart.setHours(0, 0, 0, 0)
-  weekStart.setDate(weekStart.getDate() - weekday(weekStart))
-  const thisWeek = sessions.filter((s) => s.start >= weekStart.getTime()).reduce((a, s) => a + duration(s), 0)
+  const thisWeek = sessions.filter((s) => s.start >= weekStart(now)).reduce((a, s) => a + duration(s), 0)
 
   const weekdayTotals = [0, 1, 2, 3, 4, 5, 6].map((d) => {
     const b = byWeekday.get(d)

@@ -1,6 +1,7 @@
 import { db, uid } from '../db'
 import type { Project, Session } from '../types'
 import { WEEKDAYS_LONG, isoLocal, weekday } from './format'
+import { duration } from './stats'
 
 export const EXPORT_VERSION = 1
 
@@ -16,6 +17,7 @@ export async function buildExport() {
       name: p.name,
       color: p.color,
       archived: p.archived,
+      weeklyGoalHours: p.weeklyGoalHours ?? null,
       createdAt: new Date(p.createdAt).toISOString(),
     })),
     sessions: sessions.map((s) => ({
@@ -24,7 +26,8 @@ export async function buildExport() {
       project: names.get(s.projectId) ?? null,
       start: isoLocal(s.start, s.tzOffset),
       end: isoLocal(s.end, s.tzOffset),
-      durationMin: Math.round((s.end - s.start) / 600) / 100,
+      durationMin: Math.round(duration(s) / 600) / 100,
+      pausedMin: Math.round((s.pausedMs ?? 0) / 600) / 100,
       weekday: WEEKDAYS_LONG[weekday(new Date(s.start))],
       rating: s.rating,
       ratingKind: s.ratingKind,
@@ -41,7 +44,7 @@ const csvCell = (v: unknown) => {
 }
 
 export function toCsv(data: Export) {
-  const cols = ['start', 'end', 'durationMin', 'weekday', 'project', 'rating', 'ratingKind', 'comment', 'id', 'projectId'] as const
+  const cols = ['start', 'end', 'durationMin', 'pausedMin', 'weekday', 'project', 'rating', 'ratingKind', 'comment', 'id', 'projectId'] as const
   const rows = data.sessions.map((s) => cols.map((c) => csvCell(s[c])).join(','))
   return [cols.join(','), ...rows].join('\n')
 }
@@ -84,6 +87,7 @@ export async function importJson(text: string) {
     name: p.name,
     color: p.color,
     archived: !!p.archived,
+    weeklyGoalHours: p.weeklyGoalHours ?? undefined,
     createdAt: Date.parse(p.createdAt),
   }))
   const sessions: Session[] = data.sessions.map((s) => {
@@ -94,6 +98,7 @@ export async function importJson(text: string) {
       projectId: s.projectId,
       start: Date.parse(s.start),
       end: Date.parse(s.end),
+      pausedMs: s.pausedMin ? Math.round(s.pausedMin * 60_000) : undefined,
       rating: s.rating,
       ratingKind: s.ratingKind,
       comment: s.comment || undefined,

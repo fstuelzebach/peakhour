@@ -4,6 +4,7 @@ import { db, uid } from '../db'
 import type { Session } from '../types'
 import { clock, dateLabel, hours, smileyFor, timeOfDay } from '../lib/format'
 import { SessionSheet, type SessionDraft } from '../components/SessionSheet'
+import { duration } from '../lib/stats'
 
 type Editing = { mode: 'edit'; session: Session } | { mode: 'new'; draft: SessionDraft } | null
 
@@ -47,7 +48,7 @@ export function History() {
       {sessions?.length === 0 && <p className="empty muted">Noch keine Sessions. Drück auf Start!</p>}
 
       {groups.map((list) => {
-        const total = list.reduce((a, s) => a + s.end - s.start, 0)
+        const total = list.reduce((a, s) => a + duration(s), 0)
         return (
           <section key={list[0].start} className="day">
             <div className="day-head">
@@ -64,11 +65,12 @@ export function History() {
                       <span className="row-title">{p?.name ?? 'Gelöschtes Projekt'}</span>
                       <span className="row-sub muted">
                         {timeOfDay(s.start)}–{timeOfDay(s.end)}
+                        {s.pausedMs && s.pausedMs >= 60_000 ? ` · ${hours(s.pausedMs)} Pause` : ''}
                         {s.comment ? ` · ${s.comment}` : ''}
                       </span>
                     </span>
                     <span className="row-end">
-                      <span className="row-dur">{clock(s.end - s.start)}</span>
+                      <span className="row-dur">{clock(duration(s))}</span>
                       <span className="row-emoji" title={String(s.rating)}>
                         {smileyFor(s.rating).emoji}
                       </span>

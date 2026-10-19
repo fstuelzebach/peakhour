@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import { WEEKDAYS, WEEKDAYS_LONG, hours, smileyFor } from '../lib/format'
-import { DAYPARTS, insights, totalsByProject, weekGrid, type Cell } from '../lib/stats'
+import { DAYPARTS, insights, totalsByProject, weekGrid, weekStart, weeklyHistory, type Cell } from '../lib/stats'
+import { GoalProgress } from '../components/GoalProgress'
+import type { Project, Session } from '../types'
 
 const PERIODS = [
   { id: '7', label: '7 T', days: 7 },
@@ -68,6 +70,11 @@ export function Stats() {
               sub={ins.avgRating === null ? undefined : smileyFor(ins.avgRating).emoji}
             />
           </div>
+
+          <Goals
+            projects={projects.filter((p) => !p.archived && p.weeklyGoalHours && (projectId === 'all' || p.id === projectId))}
+            sessions={allSessions}
+          />
 
           <section className="card">
             <h3>Deine Peak-Zeiten</h3>
@@ -161,6 +168,55 @@ export function Stats() {
         </>
       )}
     </div>
+  )
+}
+
+const WEEKS = 8
+
+function Goals({ projects, sessions }: { projects: Project[]; sessions: Session[] }) {
+  if (projects.length === 0) return null
+  return (
+    <section className="card">
+      <h3>Wochenziele</h3>
+      <div className="goals">
+        {projects.map((p) => {
+          const hist = weeklyHistory(sessions, p.id, Date.now(), WEEKS)
+          const goalMs = p.weeklyGoalHours! * 3_600_000
+          // only count weeks since the project's first session
+          const first = sessions.reduce((m, s) => (s.projectId === p.id ? Math.min(m, s.start) : m), Infinity)
+          const past = hist.slice(0, -1).filter((w) => Number.isFinite(first) && w.from >= weekStart(first))
+          const hit = past.filter((w) => w.ms >= goalMs).length
+          return (
+            <div key={p.id} className="goal-block">
+              <div className="goal-name">
+                <span className="dot" style={{ background: p.color }} />
+                {p.name}
+                <span className="goal-value">
+                  <strong>{hours(hist[hist.length - 1].ms)}</strong>
+                  <span className="muted"> / {p.weeklyGoalHours} h</span>
+                </span>
+              </div>
+              <GoalProgress goalHours={p.weeklyGoalHours!} doneMs={hist[hist.length - 1].ms} color={p.color} compact />
+              <div className="goal-weeks">
+                {hist.map((w, i) => (
+                  <span
+                    key={w.from}
+                    className={`goal-week ${w.ms >= goalMs ? 'hit' : ''} ${i === hist.length - 1 ? 'current' : ''}`}
+                    style={{ '--c': p.color, '--h': `${Math.min(1, w.ms / goalMs) * 100}%` } as CSSProperties}
+                    title={`${new Date(w.from).toLocaleDateString('de-DE')}: ${hours(w.ms)}`}
+                  />
+                ))}
+              </div>
+              {past.length > 0 && (
+                <div className="muted small">
+                  Ziel in {hit} von {past.length} {past.length === 1 ? 'Woche' : 'Wochen'} erreicht
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

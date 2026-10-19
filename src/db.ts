@@ -22,9 +22,29 @@ export async function startTimer(projectId: string) {
   await db.timer.put({ key: 'active', projectId, start: Date.now() })
 }
 
+export async function pauseTimer() {
+  const t = await db.timer.get('active')
+  if (t && !t.end && !t.pausedAt) await db.timer.put({ ...t, pausedAt: Date.now() })
+}
+
+export async function resumeTimer() {
+  const t = await db.timer.get('active')
+  if (!t || t.end || !t.pausedAt) return
+  const { pausedAt, ...rest } = t
+  await db.timer.put({ ...rest, pausedMs: (t.pausedMs ?? 0) + Date.now() - pausedAt })
+}
+
+/** Stopping while paused ends the session at the moment the pause began. */
 export async function stopTimer() {
   const t = await db.timer.get('active')
-  if (t && !t.end) await db.timer.put({ ...t, end: Date.now() })
+  if (!t || t.end) return
+  const { pausedAt, ...rest } = t
+  await db.timer.put({ ...rest, end: pausedAt ?? Date.now() })
+}
+
+/** Net elapsed time of the active timer at `now`. */
+export function timerElapsed(t: ActiveTimer, now: number) {
+  return (t.end ?? t.pausedAt ?? now) - t.start - (t.pausedMs ?? 0)
 }
 
 export async function discardTimer() {
